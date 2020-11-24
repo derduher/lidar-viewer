@@ -1,17 +1,22 @@
 import React, { RefObject, useEffect, useRef } from "react";
 import * as THREE from "three";
-import { Color, Vector3 } from "three";
+import { Color } from "three";
 import "./styles.css";
-import { points as lidarpts } from "./points";
+// import { points as lidarpts } from "./points";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
+import { useFrame } from "./loader";
+import scenes from "./scenes.json";
 
-const usePointCloud = (ref: RefObject<HTMLDivElement>) =>
+const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
+  const params = new URLSearchParams(window.location.search);
+  const sceneParam = params.get("scene") ?? "0011";
+  const sceneId =
+    scenes.find((scene) => scene.name.endsWith(sceneParam))?.token ??
+    scenes[0].token;
+  const frame = useFrame(sceneId, params.get("frame") ?? "001");
   useEffect(() => {
-    const pos = {
-      x: 1009.3588517405979,
-      y: 615.0332854295309,
-      z: 1.8537769669114899,
-    };
+    if (!frame) return;
+    const pos = frame.device_position;
     let container: HTMLElement;
 
     let camera: THREE.PerspectiveCamera,
@@ -120,7 +125,7 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) =>
     }
 
     function init(ref: RefObject<HTMLDivElement>) {
-      if (!ref.current) return;
+      if (!ref.current || !frame) return;
       container = ref.current;
 
       //
@@ -151,8 +156,8 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) =>
 
       let maxHSL = 0;
       let minHSL = 255;
-      for (let i = 0; i < lidarpts.length; i++) {
-        const { x, y, z, i: intensity } = lidarpts[i];
+      for (let i = 0; i < frame.points.length; i++) {
+        const { x, y, z, i: intensity } = frame.points[i];
         positions.push(x - pos.x, y - pos.y, z - pos.z);
         if (intensity > maxHSL) {
           maxHSL = intensity;
@@ -268,7 +273,8 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) =>
     function render() {
       renderer.render(scene, camera);
     }
-  }, [ref]);
+  }, [ref, frame]);
+};
 export default function App() {
   const viewPort = useRef<HTMLDivElement>(null);
   // useSmiley();
