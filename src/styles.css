@@ -1,4 +1,31 @@
-.App {
-  font-family: sans-serif;
+#blocker {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+
+  display: grid;
+  justify-content: center;
+  align-items: center;
+}
+
+#instructions {
+  color: #ffffff;
   text-align: center;
+  font-family: Arial;
+  font-size: 14px;
+  line-height: 24px;
+
+  cursor: pointer;
+}
+.cta {
+  font-size: 36px;
+  color: blue;
+}
+.sub {
+  font-size: 27px;
+}
+
+body {
+  margin: 0;
 }

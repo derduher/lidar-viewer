@@ -1,9 +1,9 @@
 import React, { RefObject, useEffect, useRef } from "react";
 import * as THREE from "three";
-import { Color } from "three";
-// import "./styles.css";
+import { Color, Vector3 } from "three";
+import "./styles.css";
 import { points as lidarpts } from "./points";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 
 const usePointCloud = (ref: RefObject<HTMLDivElement>) =>
   useEffect(() => {
@@ -17,13 +17,106 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) =>
     let camera: THREE.PerspectiveCamera,
       scene: THREE.Scene,
       renderer: THREE.WebGLRenderer,
-      controls: OrbitControls;
+      controls: PointerLockControls;
+
+    let moveForward = false;
+    let moveBackward = false;
+    let moveLeft = false;
+    let moveRight = false;
+    let moveUp = false;
+    let moveDown = false;
+    let prevTime = performance.now();
+    const velocity = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+
+    const blocker = document.getElementById("blocker");
+    const instructions = document.getElementById("instructions");
+    if (!instructions || !blocker) return;
+
+    instructions.addEventListener(
+      "click",
+      function () {
+        controls.lock();
+      },
+      false
+    );
+
+    instructions.addEventListener(
+      "click",
+      function () {
+        controls.lock();
+      },
+      false
+    );
+
+    const onKeyDown = function (event: KeyboardEvent) {
+      switch (event.code) {
+        case "ArrowUp": // up
+        case "KeyW": // w
+          moveForward = true;
+          break;
+
+        case "ArrowLeft": // left
+        case "KeyA": // a
+          moveLeft = true;
+          break;
+
+        case "ArrowDown": // down
+        case "KeyS": // s
+          moveBackward = true;
+          break;
+
+        case "ArrowRight": // right
+        case "KeyD": // d
+          moveRight = true;
+          break;
+        case "KeyF":
+          moveUp = true;
+          break;
+        case "KeyV":
+          moveDown = true;
+          break;
+      }
+    };
+
+    const onKeyUp = function (event: KeyboardEvent) {
+      switch (event.code) {
+        case "ArrowUp": // up
+        case "KeyW": // w
+          moveForward = false;
+          break;
+
+        case "ArrowLeft": // left
+        case "KeyA": // a
+          moveLeft = false;
+          break;
+
+        case "ArrowDown": // down
+        case "KeyS": // s
+          moveBackward = false;
+          break;
+
+        case "ArrowRight": // right
+        case "KeyD": // d
+          moveRight = false;
+          break;
+        case "KeyF":
+          moveUp = false;
+          break;
+        case "KeyV":
+          moveDown = false;
+          break;
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, false);
+    document.addEventListener("keyup", onKeyUp, false);
 
     let points: THREE.Object3D;
 
     if (ref.current) {
       init(ref);
-      animate();
+      animate(performance.now());
     }
 
     function init(ref: RefObject<HTMLDivElement>) {
@@ -38,15 +131,13 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) =>
         0.5,
         3500
       );
-      camera.position.z = 5;
+      // camera.position.z = 0;
 
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0);
       // scene.fog = new THREE.Fog(0x050505, 2000, 3500);
 
       //
-
-      const particles = 500000;
 
       const geometry = new THREE.BufferGeometry();
 
@@ -109,17 +200,20 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) =>
       renderer.setSize(window.innerWidth, window.innerHeight);
 
       container.appendChild(renderer.domElement);
-      controls = new OrbitControls(camera, renderer.domElement);
+      controls = new PointerLockControls(camera, renderer.domElement);
+      scene.add(controls.getObject());
 
-      //controls.update() must be called after any manual changes to the camera's transform
-      // camera.position.set(
+      controls.addEventListener("lock", function () {
+        if (!instructions || !blocker) return;
+        instructions.style.display = "none";
+        blocker.style.display = "none";
+      });
 
-      // );
-      // controls.update();
-
-      //
-
-      //
+      controls.addEventListener("unlock", function () {
+        if (!instructions || !blocker) return;
+        blocker.style.display = "grid";
+        instructions.style.display = "";
+      });
 
       window.addEventListener("resize", onWindowResize, false);
     }
@@ -133,10 +227,41 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) =>
 
     //
 
-    function animate() {
+    function animate(time: number) {
       requestAnimationFrame(animate);
-      controls.update();
 
+      if (controls.isLocked === true) {
+        const delta = (time - prevTime) / 1000;
+
+        velocity.x -= velocity.x * 10.0 * delta;
+        velocity.z -= velocity.z * 10.0 * delta;
+
+        velocity.y -= velocity.y * 10.0 * delta;
+
+        direction.z = Number(moveForward) - Number(moveBackward);
+        direction.x = Number(moveRight) - Number(moveLeft);
+        direction.y = Number(moveUp) - Number(moveDown);
+        direction.normalize(); // this ensures consistent movements in all directions
+
+        if (moveForward || moveBackward)
+          velocity.z -= direction.z * 100.0 * delta;
+        if (moveLeft || moveRight) velocity.x -= direction.x * 100.0 * delta;
+        if (moveUp || moveDown) velocity.y -= direction.y * 100.0 * delta;
+
+        controls.moveRight(-velocity.x * delta);
+        controls.moveForward(-velocity.z * delta);
+        // controls.moveUp();
+        // const vec = new Vector3();
+
+        // vec.crossVectors(camera.up, vec);
+        // vec.setFromMatrixColumn(camera.matrix, 0);
+
+        camera.translateY(-velocity.y * delta);
+
+        // controls.getObject().position.y += velocity.y * delta; // new behavior
+      }
+
+      prevTime = time;
       render();
     }
 
@@ -151,6 +276,18 @@ export default function App() {
   usePointCloud(viewPort);
   return (
     <div className="App">
+      <div id="blocker">
+        <div id="instructions">
+          <span className="cta">Click to start</span>
+          <br />
+          <span className="sub">Esc to uh escape?</span>
+          <br />
+          <br />
+          Move: WASD up/down: F/V
+          <br />
+          Look: MOUSE
+        </div>
+      </div>
       <div ref={viewPort} id="hi" />
     </div>
   );
