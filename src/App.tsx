@@ -10,7 +10,7 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) =>
     const pos = {
       x: 1009.3588517405979,
       y: 615.0332854295309,
-      z: 1.8537769669114899
+      z: 1.8537769669114899,
     };
     let container: HTMLElement;
 
@@ -38,7 +38,7 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) =>
         0.5,
         3500
       );
-      camera.position.z = 1750;
+      camera.position.z = 5;
 
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0);
@@ -94,10 +94,12 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) =>
 
       const material = new THREE.PointsMaterial({
         size: 0.1,
-        vertexColors: true
+        vertexColors: true,
       });
 
       points = new THREE.Points(geometry, material);
+
+      points.rotation.x = -Math.PI / 2;
       scene.add(points);
 
       //
