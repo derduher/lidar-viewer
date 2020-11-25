@@ -14,6 +14,7 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
     scenes.find((scene) => scene.name.endsWith(sceneParam))?.token ??
     scenes[0].token;
   const frameParam = params.get("frame") ?? "001";
+  const brightBackground = params.get("brightBackground") === "true";
   const frameNo = parseInt(frameParam, 10);
   const frame = useFrame(sceneId, frameParam);
   const annotations = useAnnotations(sceneId);
@@ -142,7 +143,7 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
       // camera.position.z = 0;
 
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0);
+      scene.background = new THREE.Color(brightBackground ? 0xffffff : 0);
       // scene.fog = new THREE.Fog(0x050505, 2000, 3500);
 
       //
@@ -192,6 +193,7 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
         const material = new THREE.LineDashedMaterial({
           dashSize: 0.2,
           gapSize: 0.1,
+          color: brightBackground ? 0 : 0xffffff,
         });
         const mesh = new THREE.LineSegments(
           new THREE.EdgesGeometry(geo.toNonIndexed()),
