@@ -177,33 +177,35 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
         colors.push(color.r, color.g, color.b);
       }
-      annotations[frameNo].cuboids.forEach(({ dimensions, position, yaw }) => {
-        const geo = new BoxBufferGeometry(
-          dimensions.x,
-          dimensions.y,
-          dimensions.z
-        );
-        geo.rotateZ(yaw);
-        geo.translate(
-          position.x - pos.x,
-          position.y - pos.y,
-          position.z - pos.z
-        );
-        geo.computeBoundingSphere();
-        const material = new THREE.LineDashedMaterial({
-          dashSize: 0.2,
-          gapSize: 0.1,
-          color: brightBackground ? 0 : 0xffffff,
-        });
-        const mesh = new THREE.LineSegments(
-          new THREE.EdgesGeometry(geo.toNonIndexed()),
-          material
-        );
-        mesh.computeLineDistances();
+      annotations[frameNo - 1].cuboids.forEach(
+        ({ dimensions, position, yaw }) => {
+          const geo = new BoxBufferGeometry(
+            dimensions.x,
+            dimensions.y,
+            dimensions.z
+          );
+          geo.rotateZ(yaw);
+          geo.translate(
+            position.x - pos.x,
+            position.y - pos.y,
+            position.z - pos.z
+          );
+          geo.computeBoundingSphere();
+          const material = new THREE.LineDashedMaterial({
+            dashSize: 0.2,
+            gapSize: 0.1,
+            color: brightBackground ? 0 : 0xffffff,
+          });
+          const mesh = new THREE.LineSegments(
+            new THREE.EdgesGeometry(geo.toNonIndexed()),
+            material
+          );
+          mesh.computeLineDistances();
 
-        mesh.rotation.x = -Math.PI / 2;
-        scene.add(mesh);
-      });
+          mesh.rotation.x = -Math.PI / 2;
+          scene.add(mesh);
+        }
+      );
       console.log(maxHSL, minHSL);
 
       geometry.setAttribute(
