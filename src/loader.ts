@@ -49,6 +49,41 @@ export const useFrame = (sceneId: string, frameNo: string) => {
       .then(([body, resp]) => {
         setFrame(body as Frame);
       });
-  }, [frameNo]);
+  }, [frameNo, sceneId]);
+  return frame;
+};
+
+export interface Cuboid {
+  uuid: string;
+  label: string; // traffic_cone
+  position: BasicVector3;
+  dimensions: BasicVector3;
+  yaw: number;
+  stationary: boolean;
+  camera_used: null;
+  attributes: {
+    visibility: "81%-100%";
+  };
+}
+
+interface AnnotationFrame {
+  cuboids: Cuboid[];
+}
+
+export const useAnnotations = (sceneId: string) => {
+  // https://www.nuscenes.org/frames/afd73f70ff7d46d6b772d341c08e31a5/annotation.json
+
+  const [frame, setFrame] = useState<AnnotationFrame[]>([]);
+  useEffect(() => {
+    window
+      .fetch(`https://www.nuscenes.org/frames/${sceneId}/annotation.json`, {
+        mode: "cors",
+        credentials: "omit",
+      })
+      .then(async (resp) => [await resp.json(), resp])
+      .then(([body, resp]) => {
+        setFrame(body as AnnotationFrame[]);
+      });
+  }, [sceneId]);
   return frame;
 };

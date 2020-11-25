@@ -1,10 +1,10 @@
 import React, { RefObject, useEffect, useRef } from "react";
 import * as THREE from "three";
-import { Color } from "three";
+import { BoxBufferGeometry, Color } from "three";
 import "./styles.css";
 // import { points as lidarpts } from "./points";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
-import { useFrame } from "./loader";
+import { useAnnotations, useFrame } from "./loader";
 import scenes from "./scenes.json";
 
 const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
@@ -13,9 +13,12 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
   const sceneId =
     scenes.find((scene) => scene.name.endsWith(sceneParam))?.token ??
     scenes[0].token;
-  const frame = useFrame(sceneId, params.get("frame") ?? "001");
+  const frameParam = params.get("frame") ?? "001";
+  const frameNo = parseInt(frameParam, 10);
+  const frame = useFrame(sceneId, frameParam);
+  const annotations = useAnnotations(sceneId);
   useEffect(() => {
-    if (!frame) return;
+    if (!frame || !annotations.length) return;
     const pos = frame.device_position;
     let container: HTMLElement;
 
@@ -173,6 +176,24 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
         colors.push(color.r, color.g, color.b);
       }
+      annotations[frameNo].cuboids.forEach(({ dimensions, position }) => {
+        const geo = new BoxBufferGeometry(
+          dimensions.x,
+          dimensions.y,
+          dimensions.z
+        );
+        geo.translate(
+          position.x - pos.x,
+          position.y - pos.y,
+          position.z - pos.z
+        );
+        geo.computeBoundingSphere();
+        const material = new THREE.LineBasicMaterial();
+        const mesh = new THREE.Mesh(geo, material);
+
+        mesh.rotation.x = -Math.PI / 2;
+        scene.add(mesh);
+      });
       console.log(maxHSL, minHSL);
 
       geometry.setAttribute(
@@ -273,7 +294,7 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
     function render() {
       renderer.render(scene, camera);
     }
-  }, [ref, frame]);
+  }, [ref, frame, annotations, frameNo]);
 };
 export default function App() {
   const viewPort = useRef<HTMLDivElement>(null);
