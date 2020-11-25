@@ -2,8 +2,10 @@ import React, { RefObject, useEffect, useRef } from "react";
 import * as THREE from "three";
 import { BoxBufferGeometry, Color } from "three";
 import "./styles.css";
-// import { points as lidarpts } from "./points";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
+
+import { VRButton } from "three/examples/jsm/webxr/VRButton.js";
+import { XRControllerModelFactory } from "three/examples/jsm/webxr/XRControllerModelFactory.js";
 import { useAnnotations, useFrame } from "./loader";
 import scenes from "./scenes.json";
 
@@ -33,6 +35,16 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
     let moveRight = false;
     let moveUp = false;
     let moveDown = false;
+    let raycaster: THREE.Raycaster;
+
+    let controller1: THREE.Group, controller2: THREE.Group;
+    let controllerGrip1, controllerGrip2;
+
+    const intersected: THREE.Object3D[] = [];
+    const tempMatrix = new THREE.Matrix4();
+
+    let group: THREE.Group;
+
     let prevTime = performance.now();
     const velocity = new THREE.Vector3();
     const direction = new THREE.Vector3();
@@ -154,11 +166,15 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
       // const color = new THREE.Color();
 
+      group = new THREE.Group();
+      scene.add(group);
+
       const n = 1000,
         n2 = n / 2; // particles spread in the cube
 
       let maxHSL = 0;
       let minHSL = 255;
+
       for (let i = 0; i < frame.points.length; i++) {
         const { x, y, z, i: intensity } = frame.points[i];
         positions.push(x - pos.x, y - pos.y, z - pos.z);
@@ -217,6 +233,7 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
       points = new THREE.Points(geometry, material);
 
       points.rotation.x = -Math.PI / 2;
+      group.add(points);
       scene.add(points);
 
       //
@@ -224,10 +241,87 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
       renderer = new THREE.WebGLRenderer();
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.shadowMap.enabled = true;
+      renderer.xr.enabled = true;
+      document.body.appendChild(VRButton.createButton(renderer));
 
       container.appendChild(renderer.domElement);
       controls = new PointerLockControls(camera, renderer.domElement);
       scene.add(controls.getObject());
+
+      function onSelectStart(event: { target?: THREE.Group }) {
+        const controller = event.target;
+        if (!controller) return;
+
+        const intersections = getIntersections(controller);
+
+        if (intersections.length > 0) {
+          const intersection = intersections[0];
+
+          const object = intersection.object;
+          // @ts-ignore
+          object.material.emissive.b = 1;
+          controller.attach(object);
+
+          controller.userData.selected = object;
+        }
+      }
+
+      function onSelectEnd(event: { target?: THREE.Group }) {
+        const controller = event.target;
+        if (!controller) return;
+
+        if (controller.userData.selected !== undefined) {
+          const object = controller.userData.selected;
+          object.material.emissive.b = 0;
+          group.attach(object);
+
+          controller.userData.selected = undefined;
+        }
+      }
+
+      // controllers
+
+      controller1 = renderer.xr.getController(0);
+      controller1.addEventListener("selectstart", onSelectStart);
+      controller1.addEventListener("selectend", onSelectEnd);
+      scene.add(controller1);
+
+      controller2 = renderer.xr.getController(1);
+      controller2.addEventListener("selectstart", onSelectStart);
+      controller2.addEventListener("selectend", onSelectEnd);
+      scene.add(controller2);
+
+      const controllerModelFactory = new XRControllerModelFactory();
+
+      controllerGrip1 = renderer.xr.getControllerGrip(0);
+      controllerGrip1.add(
+        controllerModelFactory.createControllerModel(controllerGrip1)
+      );
+      scene.add(controllerGrip1);
+
+      controllerGrip2 = renderer.xr.getControllerGrip(1);
+      controllerGrip2.add(
+        controllerModelFactory.createControllerModel(controllerGrip2)
+      );
+      scene.add(controllerGrip2);
+
+      //
+
+      const geometryRay = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, -1),
+      ]);
+
+      const line = new THREE.Line(geometryRay);
+      line.name = "line";
+      line.scale.z = 5;
+
+      controller1.add(line.clone());
+      controller2.add(line.clone());
+
+      raycaster = new THREE.Raycaster();
 
       controls.addEventListener("lock", function () {
         if (!instructions || !blocker) return;
@@ -251,10 +345,50 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
       renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
+    function getIntersections(controller: THREE.Group) {
+      tempMatrix.identity().extractRotation(controller.matrixWorld);
+
+      raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+      raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+      return raycaster.intersectObjects(group.children);
+    }
+    function intersectObjects(controller: THREE.Group) {
+      // Do not highlight when already selected
+
+      if (controller.userData.selected !== undefined) return;
+
+      const line = controller.getObjectByName("line");
+      const intersections = getIntersections(controller);
+
+      if (intersections.length > 0 && line) {
+        const intersection = intersections[0];
+
+        const object = intersection.object;
+
+        // @ts-ignore
+        object.material.emissive.r = 1;
+        intersected.push(object);
+
+        line.scale.z = intersection.distance;
+      } else if (line) {
+        line.scale.z = 5;
+      }
+    }
+
+    function cleanIntersected() {
+      while (intersected.length) {
+        const object = intersected.pop();
+
+        // @ts-ignore
+        object.material.emissive.r = 0;
+      }
+    }
+
     //
 
-    function animate(time: number) {
-      requestAnimationFrame(animate);
+    function animate(time = performance.now()) {
+      // requestAnimationFrame(animate);
 
       if (controls.isLocked === true) {
         const delta = (time - prevTime) / 1000;
@@ -276,22 +410,19 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
         controls.moveRight(-velocity.x * delta);
         controls.moveForward(-velocity.z * delta);
-        // controls.moveUp();
-        // const vec = new Vector3();
-
-        // vec.crossVectors(camera.up, vec);
-        // vec.setFromMatrixColumn(camera.matrix, 0);
 
         camera.translateY(-velocity.y * delta);
-
-        // controls.getObject().position.y += velocity.y * delta; // new behavior
       }
 
       prevTime = time;
-      render();
+      renderer.setAnimationLoop(render);
     }
 
     function render() {
+      cleanIntersected();
+
+      intersectObjects(controller1);
+      intersectObjects(controller2);
       renderer.render(scene, camera);
     }
   }, [ref, frame, annotations, frameNo]);
