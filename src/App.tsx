@@ -176,20 +176,28 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
         colors.push(color.r, color.g, color.b);
       }
-      annotations[frameNo].cuboids.forEach(({ dimensions, position }) => {
+      annotations[frameNo].cuboids.forEach(({ dimensions, position, yaw }) => {
         const geo = new BoxBufferGeometry(
           dimensions.x,
           dimensions.y,
           dimensions.z
         );
+        geo.rotateZ(yaw);
         geo.translate(
           position.x - pos.x,
           position.y - pos.y,
           position.z - pos.z
         );
         geo.computeBoundingSphere();
-        const material = new THREE.LineBasicMaterial();
-        const mesh = new THREE.Mesh(geo, material);
+        const material = new THREE.LineDashedMaterial({
+          dashSize: 0.2,
+          gapSize: 0.1,
+        });
+        const mesh = new THREE.LineSegments(
+          new THREE.EdgesGeometry(geo.toNonIndexed()),
+          material
+        );
+        mesh.computeLineDistances();
 
         mesh.rotation.x = -Math.PI / 2;
         scene.add(mesh);
