@@ -1,4 +1,4 @@
-import React, { RefObject, useEffect, useRef } from "react";
+import React, { RefObject, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { BoxBufferGeometry, Color } from "three";
 import "./styles.css";
@@ -16,8 +16,9 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
     scenes.find((scene) => scene.name.endsWith(sceneParam))?.token ??
     scenes[0].token;
   const frameParam = params.get("frame") ?? "001";
-  const frameNo = parseInt(frameParam, 10);
-  const frame = useFrame(sceneId, frameParam);
+  const brightBackground = params.get("brightBackground") === "true";
+  const [frameNo, setFrameNo] = useState(parseInt(frameParam, 10));
+  const frame = useFrame(sceneId, frameNo.toString().padStart(3, "0"));
   const annotations = useAnnotations(sceneId);
   useEffect(() => {
     if (!frame || !annotations.length) return;
@@ -45,6 +46,8 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
     let group: THREE.Group;
 
+    let advanceTime = false;
+    let reverseTime = false;
     let prevTime = performance.now();
     const velocity = new THREE.Vector3();
     const direction = new THREE.Vector3();
@@ -71,12 +74,17 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
     const onKeyDown = function (event: KeyboardEvent) {
       switch (event.code) {
+        case "ArrowLeft": // left
+          reverseTime = true;
+          break;
+        case "ArrowRight": // right
+          advanceTime = true;
+          break;
         case "ArrowUp": // up
         case "KeyW": // w
           moveForward = true;
           break;
 
-        case "ArrowLeft": // left
         case "KeyA": // a
           moveLeft = true;
           break;
@@ -86,14 +94,15 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
           moveBackward = true;
           break;
 
-        case "ArrowRight": // right
         case "KeyD": // d
           moveRight = true;
           break;
         case "KeyF":
+        case "Space":
           moveUp = true;
           break;
         case "KeyV":
+        case "ControlLeft":
           moveDown = true;
           break;
       }
@@ -101,12 +110,17 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
     const onKeyUp = function (event: KeyboardEvent) {
       switch (event.code) {
+        case "ArrowLeft": // left
+          reverseTime = false;
+          break;
+        case "ArrowRight": // right
+          advanceTime = false;
+          break;
         case "ArrowUp": // up
         case "KeyW": // w
           moveForward = false;
           break;
 
-        case "ArrowLeft": // left
         case "KeyA": // a
           moveLeft = false;
           break;
@@ -116,14 +130,15 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
           moveBackward = false;
           break;
 
-        case "ArrowRight": // right
         case "KeyD": // d
           moveRight = false;
           break;
         case "KeyF":
+        case "Space":
           moveUp = false;
           break;
         case "KeyV":
+        case "ControlLeft":
           moveDown = false;
           break;
       }
@@ -154,7 +169,7 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
       // camera.position.z = 0;
 
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0);
+      scene.background = new THREE.Color(brightBackground ? 0xffffff : 0);
       // scene.fog = new THREE.Fog(0x050505, 2000, 3500);
 
       //
@@ -172,18 +187,9 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
       const n = 1000,
         n2 = n / 2; // particles spread in the cube
 
-      let maxHSL = 0;
-      let minHSL = 255;
-
       for (let i = 0; i < frame.points.length; i++) {
         const { x, y, z, i: intensity } = frame.points[i];
         positions.push(x - pos.x, y - pos.y, z - pos.z);
-        if (intensity > maxHSL) {
-          maxHSL = intensity;
-        }
-        if (intensity < minHSL) {
-          minHSL = intensity;
-        }
         // color.setRGB(1, 1, 1);
         const color = new Color(
           `hsl(200, 100%, ${((100 * intensity) / 255) | 0}%)`
@@ -192,25 +198,35 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
         colors.push(color.r, color.g, color.b);
       }
-      annotations[frameNo].cuboids.forEach(({ dimensions, position }) => {
-        const geo = new BoxBufferGeometry(
-          dimensions.x,
-          dimensions.y,
-          dimensions.z
-        );
-        geo.translate(
-          position.x - pos.x,
-          position.y - pos.y,
-          position.z - pos.z
-        );
-        geo.computeBoundingSphere();
-        const material = new THREE.LineBasicMaterial();
-        const mesh = new THREE.Mesh(geo, material);
+      annotations[frameNo - 1].cuboids.forEach(
+        ({ dimensions, position, yaw }) => {
+          const geo = new BoxBufferGeometry(
+            dimensions.x,
+            dimensions.y,
+            dimensions.z
+          );
+          geo.rotateZ(yaw);
+          geo.translate(
+            position.x - pos.x,
+            position.y - pos.y,
+            position.z - pos.z
+          );
+          geo.computeBoundingSphere();
+          const material = new THREE.LineDashedMaterial({
+            dashSize: 0.2,
+            gapSize: 0.1,
+            color: brightBackground ? 0 : 0xffffff,
+          });
+          const mesh = new THREE.LineSegments(
+            new THREE.EdgesGeometry(geo.toNonIndexed()),
+            material
+          );
+          mesh.computeLineDistances();
 
-        mesh.rotation.x = -Math.PI / 2;
-        scene.add(mesh);
-      });
-      console.log(maxHSL, minHSL);
+          mesh.rotation.x = -Math.PI / 2;
+          scene.add(mesh);
+        }
+      );
 
       geometry.setAttribute(
         "position",
@@ -407,6 +423,10 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
           velocity.z -= direction.z * 100.0 * delta;
         if (moveLeft || moveRight) velocity.x -= direction.x * 100.0 * delta;
         if (moveUp || moveDown) velocity.y -= direction.y * 100.0 * delta;
+        if (advanceTime || reverseTime)
+          setFrameNo(
+            (frameNo) => frameNo + Number(advanceTime) - Number(reverseTime)
+          );
 
         controls.moveRight(-velocity.x * delta);
         controls.moveForward(-velocity.z * delta);
