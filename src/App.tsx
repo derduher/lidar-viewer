@@ -1,4 +1,4 @@
-import React, { RefObject, useEffect, useRef } from "react";
+import React, { RefObject, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { BoxBufferGeometry, Color } from "three";
 import "./styles.css";
@@ -15,8 +15,8 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
     scenes[0].token;
   const frameParam = params.get("frame") ?? "001";
   const brightBackground = params.get("brightBackground") === "true";
-  const frameNo = parseInt(frameParam, 10);
-  const frame = useFrame(sceneId, frameParam);
+  const [frameNo, setFrameNo] = useState(parseInt(frameParam, 10));
+  const frame = useFrame(sceneId, frameNo.toString().padStart(3, "0"));
   const annotations = useAnnotations(sceneId);
   useEffect(() => {
     if (!frame || !annotations.length) return;
@@ -34,6 +34,8 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
     let moveRight = false;
     let moveUp = false;
     let moveDown = false;
+    let advanceTime = false;
+    let reverseTime = false;
     let prevTime = performance.now();
     const velocity = new THREE.Vector3();
     const direction = new THREE.Vector3();
@@ -60,12 +62,17 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
     const onKeyDown = function (event: KeyboardEvent) {
       switch (event.code) {
+        case "ArrowLeft": // left
+          reverseTime = true;
+          break;
+        case "ArrowRight": // right
+          advanceTime = true;
+          break;
         case "ArrowUp": // up
         case "KeyW": // w
           moveForward = true;
           break;
 
-        case "ArrowLeft": // left
         case "KeyA": // a
           moveLeft = true;
           break;
@@ -75,14 +82,15 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
           moveBackward = true;
           break;
 
-        case "ArrowRight": // right
         case "KeyD": // d
           moveRight = true;
           break;
         case "KeyF":
+        case "Space":
           moveUp = true;
           break;
         case "KeyV":
+        case "ControlLeft":
           moveDown = true;
           break;
       }
@@ -90,12 +98,17 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
     const onKeyUp = function (event: KeyboardEvent) {
       switch (event.code) {
+        case "ArrowLeft": // left
+          reverseTime = false;
+          break;
+        case "ArrowRight": // right
+          advanceTime = false;
+          break;
         case "ArrowUp": // up
         case "KeyW": // w
           moveForward = false;
           break;
 
-        case "ArrowLeft": // left
         case "KeyA": // a
           moveLeft = false;
           break;
@@ -105,14 +118,15 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
           moveBackward = false;
           break;
 
-        case "ArrowRight": // right
         case "KeyD": // d
           moveRight = false;
           break;
         case "KeyF":
+        case "Space":
           moveUp = false;
           break;
         case "KeyV":
+        case "ControlLeft":
           moveDown = false;
           break;
       }
@@ -158,17 +172,9 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
       const n = 1000,
         n2 = n / 2; // particles spread in the cube
 
-      let maxHSL = 0;
-      let minHSL = 255;
       for (let i = 0; i < frame.points.length; i++) {
         const { x, y, z, i: intensity } = frame.points[i];
         positions.push(x - pos.x, y - pos.y, z - pos.z);
-        if (intensity > maxHSL) {
-          maxHSL = intensity;
-        }
-        if (intensity < minHSL) {
-          minHSL = intensity;
-        }
         // color.setRGB(1, 1, 1);
         const color = new Color(
           `hsl(200, 100%, ${((100 * intensity) / 255) | 0}%)`
@@ -206,7 +212,6 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
           scene.add(mesh);
         }
       );
-      console.log(maxHSL, minHSL);
 
       geometry.setAttribute(
         "position",
@@ -285,6 +290,10 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
           velocity.z -= direction.z * 100.0 * delta;
         if (moveLeft || moveRight) velocity.x -= direction.x * 100.0 * delta;
         if (moveUp || moveDown) velocity.y -= direction.y * 100.0 * delta;
+        if (advanceTime || reverseTime)
+          setFrameNo(
+            (frameNo) => frameNo + Number(advanceTime) - Number(reverseTime)
+          );
 
         controls.moveRight(-velocity.x * delta);
         controls.moveForward(-velocity.z * delta);
