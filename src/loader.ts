@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { BufferGeometry, Geometry, Material, Points } from "three";
+import { PCDLoader } from "three/examples/jsm/loaders/PCDLoader";
 
 export interface BasicVector3 {
   x: number;
@@ -50,6 +52,35 @@ export const useFrame = (sceneId: string, frameNo: string) => {
         setFrame(body as Frame);
       });
   }, [frameNo, sceneId]);
+  return frame;
+};
+
+const loader = new PCDLoader();
+export const useLocal = (
+  file: string
+): Points<Geometry | BufferGeometry, Material | Material[]> | null => {
+  const [frame, setFrame] = useState<Points<
+    Geometry | BufferGeometry,
+    Material | Material[]
+  > | null>(null);
+  useEffect(() => {
+    loader.load(
+      // resource URL
+      `/${file}`,
+      // called when the resource is loaded
+      function (mesh) {
+        setFrame(mesh);
+      },
+      // called when loading is in progresses
+      function (xhr) {
+        console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
+      },
+      // called when loading has errors
+      function (error) {
+        console.log("An error happened");
+      }
+    );
+  }, []);
   return frame;
 };
 
