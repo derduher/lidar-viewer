@@ -5,6 +5,105 @@ import "./styles.css";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import { useNuScenesAnnotations, useNuScenesFrame, useLocal } from "./loader";
 
+interface ControlKeysPressed {
+  moveForward: boolean;
+  moveBackward: boolean;
+  moveLeft: boolean;
+  moveRight: boolean;
+  moveUp: boolean;
+  moveDown: boolean;
+  advanceTime: boolean;
+  reverseTime: boolean;
+}
+
+const p: ControlKeysPressed = {
+  moveForward: false,
+  moveBackward: false,
+  moveLeft: false,
+  moveRight: false,
+  moveUp: false,
+  moveDown: false,
+  advanceTime: false,
+  reverseTime: false,
+};
+
+const bindControls = (): void => {
+  const onKeyDown = function (event: KeyboardEvent) {
+    switch (event.code) {
+      case "ArrowLeft": // left
+        p.reverseTime = true;
+        break;
+      case "ArrowRight": // right
+        p.advanceTime = true;
+        break;
+      case "ArrowUp": // up
+      case "KeyW": // w
+        p.moveForward = true;
+        break;
+
+      case "KeyA": // a
+        p.moveLeft = true;
+        break;
+
+      case "ArrowDown": // down
+      case "KeyS": // s
+        p.moveBackward = true;
+        break;
+
+      case "KeyD": // d
+        p.moveRight = true;
+        break;
+      case "KeyF":
+      case "Space":
+        p.moveUp = true;
+        break;
+      case "KeyV":
+      case "ControlLeft":
+        p.moveDown = true;
+        break;
+    }
+  };
+
+  const onKeyUp = function (event: KeyboardEvent) {
+    switch (event.code) {
+      case "ArrowLeft": // left
+        p.reverseTime = false;
+        break;
+      case "ArrowRight": // right
+        p.advanceTime = false;
+        break;
+      case "ArrowUp": // up
+      case "KeyW": // w
+        p.moveForward = false;
+        break;
+
+      case "KeyA": // a
+        p.moveLeft = false;
+        break;
+
+      case "ArrowDown": // down
+      case "KeyS": // s
+        p.moveBackward = false;
+        break;
+
+      case "KeyD": // d
+        p.moveRight = false;
+        break;
+      case "KeyF":
+      case "Space":
+        p.moveUp = false;
+        break;
+      case "KeyV":
+      case "ControlLeft":
+        p.moveDown = false;
+        break;
+    }
+  };
+
+  document.addEventListener("keydown", onKeyDown, false);
+  document.addEventListener("keyup", onKeyUp, false);
+};
+
 export interface UsePointCloudParams {
   ref: RefObject<HTMLDivElement>;
   selectedFile: File | null;
@@ -44,14 +143,8 @@ const usePointCloud = ({
       renderer: THREE.WebGLRenderer,
       controls: PointerLockControls;
 
-    let moveForward = false;
-    let moveBackward = false;
-    let moveLeft = false;
-    let moveRight = false;
-    let moveUp = false;
-    let moveDown = false;
-    let advanceTime = false;
-    let reverseTime = false;
+    bindControls();
+
     let prevTime = performance.now();
     const velocity = new THREE.Vector3();
     const direction = new THREE.Vector3();
@@ -72,84 +165,8 @@ const usePointCloud = ({
       false
     );
 
-    const onKeyDown = function (event: KeyboardEvent) {
-      switch (event.code) {
-        case "ArrowLeft": // left
-          reverseTime = true;
-          break;
-        case "ArrowRight": // right
-          advanceTime = true;
-          break;
-        case "ArrowUp": // up
-        case "KeyW": // w
-          moveForward = true;
-          break;
-
-        case "KeyA": // a
-          moveLeft = true;
-          break;
-
-        case "ArrowDown": // down
-        case "KeyS": // s
-          moveBackward = true;
-          break;
-
-        case "KeyD": // d
-          moveRight = true;
-          break;
-        case "KeyF":
-        case "Space":
-          moveUp = true;
-          break;
-        case "KeyV":
-        case "ControlLeft":
-          moveDown = true;
-          break;
-      }
-    };
-
-    const onKeyUp = function (event: KeyboardEvent) {
-      switch (event.code) {
-        case "ArrowLeft": // left
-          reverseTime = false;
-          break;
-        case "ArrowRight": // right
-          advanceTime = false;
-          break;
-        case "ArrowUp": // up
-        case "KeyW": // w
-          moveForward = false;
-          break;
-
-        case "KeyA": // a
-          moveLeft = false;
-          break;
-
-        case "ArrowDown": // down
-        case "KeyS": // s
-          moveBackward = false;
-          break;
-
-        case "KeyD": // d
-          moveRight = false;
-          break;
-        case "KeyF":
-        case "Space":
-          moveUp = false;
-          break;
-        case "KeyV":
-        case "ControlLeft":
-          moveDown = false;
-          break;
-      }
-    };
-
-    document.addEventListener("keydown", onKeyDown, false);
-    document.addEventListener("keyup", onKeyUp, false);
-
     let points: THREE.Object3D;
 
-    debugger;
     if (ref.current) {
       init(ref);
       animate(performance.now());
@@ -245,6 +262,16 @@ const usePointCloud = ({
         points.rotation.x = -Math.PI / 2;
         scene.add(points);
       } else if (localFrame) {
+        console.log("pcd", localFrame);
+        (Array.isArray(localFrame.material)
+          ? localFrame.material
+          : [localFrame.material]
+        ).forEach((m) => {
+          if (m instanceof THREE.PointsMaterial) {
+            m.size = 0.1;
+            m.color = new Color(`hsl(200, 100%, 75%)`);
+          }
+        });
         localFrame.rotation.x = -Math.PI / 2;
         scene.add(localFrame);
       } else {
@@ -287,6 +314,17 @@ const usePointCloud = ({
 
     function animate(time: number) {
       requestAnimationFrame(animate);
+
+      const {
+        moveBackward,
+        moveDown,
+        moveForward,
+        moveLeft,
+        moveRight,
+        moveUp,
+        reverseTime,
+        advanceTime,
+      } = p;
 
       if (controls.isLocked === true) {
         const delta = (time - prevTime) / 1000;
@@ -352,16 +390,20 @@ export default function App() {
     <div className="App">
       <div id="blocker">
         <div id="instructions">
-          <label htmlFor="pcd">Select a file</label>
-          <input
-            id="pcd"
-            type="file"
-            name="pcd"
-            onChange={(e) =>
-              setSelectedFile(e.target.files && e.target.files[0])
-            }
-          />
-          <span className="cta">Click to start</span>
+          <div className="filePick">
+            <label htmlFor="pcd">Select a file</label>
+            <input
+              id="pcd"
+              type="file"
+              name="pcd"
+              onChange={(e) =>
+                setSelectedFile(e.target.files && e.target.files[0])
+              }
+            />
+          </div>
+          {!selectedFile && !sceneParam ? null : (
+            <span className="cta">Click to start</span>
+          )}
           <br />
           <span className="sub">Esc to uh escape?</span>
           <br />
