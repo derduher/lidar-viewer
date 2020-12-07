@@ -19,11 +19,20 @@
   cursor: pointer;
 }
 .cta {
-  font-size: 36px;
   color: blue;
+}
+.filePick,
+.cta {
+  font-size: 36px;
+}
+.filePick label {
+  margin-right: 1rem;
 }
 .sub {
   font-size: 27px;
+}
+#hi {
+  display: flex;
 }
 
 body {

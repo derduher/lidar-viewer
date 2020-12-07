@@ -3,26 +3,141 @@ import * as THREE from "three";
 import { BoxBufferGeometry, Color } from "three";
 import "./styles.css";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
-
 import { VRButton } from "three/examples/jsm/webxr/VRButton.js";
 import { XRControllerModelFactory } from "three/examples/jsm/webxr/XRControllerModelFactory.js";
-import { useAnnotations, useFrame } from "./loader";
-import scenes from "./scenes.json";
+import { useNuScenesAnnotations, useNuScenesFrame, useLocal } from "./loader";
 
-const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
-  const params = new URLSearchParams(window.location.search);
-  const sceneParam = params.get("scene") ?? "0011";
-  const sceneId =
-    scenes.find((scene) => scene.name.endsWith(sceneParam))?.token ??
-    scenes[0].token;
-  const frameParam = params.get("frame") ?? "001";
-  const brightBackground = params.get("brightBackground") === "true";
-  const [frameNo, setFrameNo] = useState(parseInt(frameParam, 10));
-  const frame = useFrame(sceneId, frameNo.toString().padStart(3, "0"));
-  const annotations = useAnnotations(sceneId);
+interface ControlKeysPressed {
+  moveForward: boolean;
+  moveBackward: boolean;
+  moveLeft: boolean;
+  moveRight: boolean;
+  moveUp: boolean;
+  moveDown: boolean;
+  advanceTime: boolean;
+  reverseTime: boolean;
+}
+
+const p: ControlKeysPressed = {
+  moveForward: false,
+  moveBackward: false,
+  moveLeft: false,
+  moveRight: false,
+  moveUp: false,
+  moveDown: false,
+  advanceTime: false,
+  reverseTime: false,
+};
+
+const bindControls = (): void => {
+  const onKeyDown = function (event: KeyboardEvent) {
+    switch (event.code) {
+      case "ArrowLeft": // left
+        p.reverseTime = true;
+        break;
+      case "ArrowRight": // right
+        p.advanceTime = true;
+        break;
+      case "ArrowUp": // up
+      case "KeyW": // w
+        p.moveForward = true;
+        break;
+
+      case "KeyA": // a
+        p.moveLeft = true;
+        break;
+
+      case "ArrowDown": // down
+      case "KeyS": // s
+        p.moveBackward = true;
+        break;
+
+      case "KeyD": // d
+        p.moveRight = true;
+        break;
+      case "KeyF":
+      case "Space":
+        p.moveUp = true;
+        break;
+      case "KeyV":
+      case "ControlLeft":
+        p.moveDown = true;
+        break;
+    }
+  };
+
+  const onKeyUp = function (event: KeyboardEvent) {
+    switch (event.code) {
+      case "ArrowLeft": // left
+        p.reverseTime = false;
+        break;
+      case "ArrowRight": // right
+        p.advanceTime = false;
+        break;
+      case "ArrowUp": // up
+      case "KeyW": // w
+        p.moveForward = false;
+        break;
+
+      case "KeyA": // a
+        p.moveLeft = false;
+        break;
+
+      case "ArrowDown": // down
+      case "KeyS": // s
+        p.moveBackward = false;
+        break;
+
+      case "KeyD": // d
+        p.moveRight = false;
+        break;
+      case "KeyF":
+      case "Space":
+        p.moveUp = false;
+        break;
+      case "KeyV":
+      case "ControlLeft":
+        p.moveDown = false;
+        break;
+    }
+  };
+
+  document.addEventListener("keydown", onKeyDown, false);
+  document.addEventListener("keyup", onKeyUp, false);
+};
+
+export interface UsePointCloudParams {
+  ref: RefObject<HTMLDivElement>;
+  selectedFile: File | null;
+  sceneParam: string | null;
+  frameParam: string | null;
+  brightBackground: boolean;
+}
+
+const usePointCloud = ({
+  ref,
+  selectedFile,
+  sceneParam,
+  frameParam,
+  brightBackground,
+}: UsePointCloudParams) => {
+  const [frameNo, setFrameNo] = useState(parseInt(frameParam ?? "0", 10));
+  const localFrame = useLocal(selectedFile);
+  const nuScenesFrame = useNuScenesFrame(sceneParam, frameNo);
+  const annotations = useNuScenesAnnotations(sceneParam);
   useEffect(() => {
-    if (!frame || !annotations.length) return;
-    const pos = frame.device_position;
+    const blocker = document.getElementById("blocker");
+    const instructions = document.getElementById("instructions");
+    if (
+      !instructions ||
+      !blocker ||
+      (!localFrame && !sceneParam) ||
+      (!localFrame && selectedFile) ||
+      (sceneParam !== null && (!annotations.length || !nuScenesFrame))
+    ) {
+      return;
+    }
+    // const pos = frame.device_position;
     let container: HTMLElement;
 
     let camera: THREE.PerspectiveCamera,
@@ -30,12 +145,6 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
       renderer: THREE.WebGLRenderer,
       controls: PointerLockControls;
 
-    let moveForward = false;
-    let moveBackward = false;
-    let moveLeft = false;
-    let moveRight = false;
-    let moveUp = false;
-    let moveDown = false;
     let raycaster: THREE.Raycaster;
 
     let controller1: THREE.Group, controller2: THREE.Group;
@@ -45,17 +154,12 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
     const tempMatrix = new THREE.Matrix4();
 
     let group: THREE.Group;
+    bindControls();
 
-    let advanceTime = false;
-    let reverseTime = false;
     let prevTime = performance.now();
     const velocity = new THREE.Vector3();
     const direction = new THREE.Vector3();
 
-    const blocker = document.getElementById("blocker");
-    const instructions = document.getElementById("instructions");
-    if (!instructions || !blocker) return;
-
     instructions.addEventListener(
       "click",
       function () {
@@ -71,81 +175,6 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
       },
       false
     );
-
-    const onKeyDown = function (event: KeyboardEvent) {
-      switch (event.code) {
-        case "ArrowLeft": // left
-          reverseTime = true;
-          break;
-        case "ArrowRight": // right
-          advanceTime = true;
-          break;
-        case "ArrowUp": // up
-        case "KeyW": // w
-          moveForward = true;
-          break;
-
-        case "KeyA": // a
-          moveLeft = true;
-          break;
-
-        case "ArrowDown": // down
-        case "KeyS": // s
-          moveBackward = true;
-          break;
-
-        case "KeyD": // d
-          moveRight = true;
-          break;
-        case "KeyF":
-        case "Space":
-          moveUp = true;
-          break;
-        case "KeyV":
-        case "ControlLeft":
-          moveDown = true;
-          break;
-      }
-    };
-
-    const onKeyUp = function (event: KeyboardEvent) {
-      switch (event.code) {
-        case "ArrowLeft": // left
-          reverseTime = false;
-          break;
-        case "ArrowRight": // right
-          advanceTime = false;
-          break;
-        case "ArrowUp": // up
-        case "KeyW": // w
-          moveForward = false;
-          break;
-
-        case "KeyA": // a
-          moveLeft = false;
-          break;
-
-        case "ArrowDown": // down
-        case "KeyS": // s
-          moveBackward = false;
-          break;
-
-        case "KeyD": // d
-          moveRight = false;
-          break;
-        case "KeyF":
-        case "Space":
-          moveUp = false;
-          break;
-        case "KeyV":
-        case "ControlLeft":
-          moveDown = false;
-          break;
-      }
-    };
-
-    document.addEventListener("keydown", onKeyDown, false);
-    document.addEventListener("keyup", onKeyUp, false);
 
     let points: THREE.Object3D;
 
@@ -155,7 +184,12 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
     }
 
     function init(ref: RefObject<HTMLDivElement>) {
-      if (!ref.current || !frame) return;
+      if (
+        !ref.current ||
+        (!localFrame && selectedFile) ||
+        (sceneParam !== null && (!annotations.length || !nuScenesFrame))
+      )
+        return;
       container = ref.current;
 
       //
@@ -170,9 +204,6 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
       scene = new THREE.Scene();
       scene.background = new THREE.Color(brightBackground ? 0xffffff : 0);
-      // scene.fog = new THREE.Fog(0x050505, 2000, 3500);
-
-      //
 
       const geometry = new THREE.BufferGeometry();
 
@@ -183,74 +214,82 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
 
       group = new THREE.Group();
       scene.add(group);
-
-      const n = 1000,
-        n2 = n / 2; // particles spread in the cube
-
-      for (let i = 0; i < frame.points.length; i++) {
-        const { x, y, z, i: intensity } = frame.points[i];
-        positions.push(x - pos.x, y - pos.y, z - pos.z);
-        // color.setRGB(1, 1, 1);
-        const color = new Color(
-          `hsl(200, 100%, ${((100 * intensity) / 255) | 0}%)`
-        );
-        // color.setHSL(1, 1, intensity / 255);
-
-        colors.push(color.r, color.g, color.b);
-      }
-      annotations[frameNo - 1].cuboids.forEach(
-        ({ dimensions, position, yaw }) => {
-          const geo = new BoxBufferGeometry(
-            dimensions.x,
-            dimensions.y,
-            dimensions.z
+      if (nuScenesFrame) {
+        const { x: px, y: py, z: pz } = nuScenesFrame.device_position;
+        for (let i = 0; i < nuScenesFrame.points.length; i++) {
+          const { x, y, z, i: intensity } = nuScenesFrame.points[i];
+          positions.push(x - px, y - py, z - pz);
+          // color.setRGB(1, 1, 1);
+          const color = new Color(
+            `hsl(200, 100%, ${((100 * intensity) / 255) | 0}%)`
           );
-          geo.rotateZ(yaw);
-          geo.translate(
-            position.x - pos.x,
-            position.y - pos.y,
-            position.z - pos.z
-          );
-          geo.computeBoundingSphere();
-          const material = new THREE.LineDashedMaterial({
-            dashSize: 0.2,
-            gapSize: 0.1,
-            color: brightBackground ? 0 : 0xffffff,
-          });
-          const mesh = new THREE.LineSegments(
-            new THREE.EdgesGeometry(geo.toNonIndexed()),
-            material
-          );
-          mesh.computeLineDistances();
+          // color.setHSL(1, 1, intensity / 255);
 
-          mesh.rotation.x = -Math.PI / 2;
-          scene.add(mesh);
+          colors.push(color.r, color.g, color.b);
         }
-      );
+        annotations[frameNo - 1].cuboids.forEach(
+          ({ dimensions, position, yaw }) => {
+            const geo = new BoxBufferGeometry(
+              dimensions.x,
+              dimensions.y,
+              dimensions.z
+            );
+            geo.rotateZ(yaw);
+            geo.translate(position.x - px, position.y - py, position.z - pz);
+            geo.computeBoundingSphere();
+            const material = new THREE.LineDashedMaterial({
+              dashSize: 0.2,
+              gapSize: 0.1,
+              color: brightBackground ? 0 : 0xffffff,
+            });
+            const mesh = new THREE.LineSegments(
+              new THREE.EdgesGeometry(geo.toNonIndexed()),
+              material
+            );
+            mesh.computeLineDistances();
 
-      geometry.setAttribute(
-        "position",
-        new THREE.Float32BufferAttribute(positions, 3)
-      );
-      geometry.setAttribute(
-        "color",
-        new THREE.Float32BufferAttribute(colors, 3)
-      );
+            mesh.rotation.x = -Math.PI / 2;
+            scene.add(mesh);
+          }
+        );
 
-      geometry.computeBoundingSphere();
+        geometry.setAttribute(
+          "position",
+          new THREE.Float32BufferAttribute(positions, 3)
+        );
+        geometry.setAttribute(
+          "color",
+          new THREE.Float32BufferAttribute(colors, 3)
+        );
 
-      //
+        geometry.computeBoundingSphere();
 
-      const material = new THREE.PointsMaterial({
-        size: 0.1,
-        vertexColors: true,
-      });
+        //
 
-      points = new THREE.Points(geometry, material);
+        const material = new THREE.PointsMaterial({
+          size: 0.1,
+          vertexColors: true,
+        });
 
-      points.rotation.x = -Math.PI / 2;
-      group.add(points);
-      scene.add(points);
+        points = new THREE.Points(geometry, material);
+        points.rotation.x = -Math.PI / 2;
+        group.add(points);
+      } else if (localFrame) {
+        console.log("pcd", localFrame);
+        (Array.isArray(localFrame.material)
+          ? localFrame.material
+          : [localFrame.material]
+        ).forEach((m) => {
+          if (m instanceof THREE.PointsMaterial) {
+            m.size = 0.1;
+            m.color = new Color(`hsl(200, 100%, 75%)`);
+          }
+        });
+        localFrame.rotation.x = -Math.PI / 2;
+        group.add(localFrame);
+      } else {
+        debugger;
+      }
 
       //
 
@@ -383,7 +422,7 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
         const object = intersection.object;
 
         // @ts-ignore
-        object.material.emissive.r = 1;
+        // object.material.emissive.r = 1;
         intersected.push(object);
 
         line.scale.z = intersection.distance;
@@ -393,18 +432,28 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
     }
 
     function cleanIntersected() {
-      while (intersected.length) {
-        const object = intersected.pop();
-
-        // @ts-ignore
-        object.material.emissive.r = 0;
-      }
+      // while (intersected.length) {
+      //   const object = intersected.pop();
+      //   // // @ts-ignore
+      //   // object.material.emissive.r = 0;
+      // }
     }
 
     //
 
     function animate(time = performance.now()) {
       // requestAnimationFrame(animate);
+
+      const {
+        moveBackward,
+        moveDown,
+        moveForward,
+        moveLeft,
+        moveRight,
+        moveUp,
+        reverseTime,
+        advanceTime,
+      } = p;
 
       if (controls.isLocked === true) {
         const delta = (time - prevTime) / 1000;
@@ -445,18 +494,49 @@ const usePointCloud = (ref: RefObject<HTMLDivElement>) => {
       intersectObjects(controller2);
       renderer.render(scene, camera);
     }
-  }, [ref, frame, annotations, frameNo]);
+  }, [
+    ref,
+    localFrame,
+    annotations,
+    frameNo,
+    brightBackground,
+    nuScenesFrame,
+    sceneParam,
+    selectedFile,
+  ]);
 };
 export default function App() {
+  const params = new URLSearchParams(window.location.search);
+  const sceneParam = params.get("scene");
+  const frameParam = params.get("frame");
+  const brightBackground = params.get("brightBackground") === "true";
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const viewPort = useRef<HTMLDivElement>(null);
-  // useSmiley();
-  // useBasic();
-  usePointCloud(viewPort);
+  usePointCloud({
+    ref: viewPort,
+    selectedFile,
+    sceneParam,
+    frameParam,
+    brightBackground,
+  });
   return (
     <div className="App">
       <div id="blocker">
         <div id="instructions">
-          <span className="cta">Click to start</span>
+          <div className="filePick">
+            <label htmlFor="pcd">Select a file</label>
+            <input
+              id="pcd"
+              type="file"
+              name="pcd"
+              onChange={(e) =>
+                setSelectedFile(e.target.files && e.target.files[0])
+              }
+            />
+          </div>
+          {!selectedFile && !sceneParam ? null : (
+            <span className="cta">Click to start</span>
+          )}
           <br />
           <span className="sub">Esc to uh escape?</span>
           <br />

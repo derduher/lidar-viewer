@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import { BufferGeometry, Geometry, Material, Points } from "three";
+import { PCDLoader } from "three/examples/jsm/loaders/PCDLoader";
+import scenes from "./scenes.json";
 
 export interface BasicVector3 {
   x: number;
@@ -37,19 +40,54 @@ export interface Frame {
   timestamp: number;
 }
 
-export const useFrame = (sceneId: string, frameNo: string) => {
+export const useNuScenesFrame = (
+  sceneParam: string | null,
+  frameNo: number
+) => {
   const [frame, setFrame] = useState<Frame | null>(null);
   useEffect(() => {
+    if (!sceneParam) return;
     window
-      .fetch(`https://www.nuscenes.org/frames/${sceneId}/${frameNo}.json`, {
-        mode: "cors",
-        credentials: "omit",
-      })
+      .fetch(
+        `https://www.nuscenes.org/frames/${
+          scenes.find((scene) => scene.name.endsWith(sceneParam))?.token ??
+          scenes[0].token
+        }/${frameNo.toString().padStart(3, "0")}.json`,
+        {
+          mode: "cors",
+          credentials: "omit",
+        }
+      )
       .then(async (resp) => [await resp.json(), resp])
       .then(([body, resp]) => {
         setFrame(body as Frame);
       });
-  }, [frameNo, sceneId]);
+  }, [frameNo, sceneParam]);
+  return frame;
+};
+
+interface BlobUnSupport {
+  arrayBuffer: () => Promise<ArrayBuffer>;
+}
+
+const loader = new PCDLoader();
+export const useLocal = (
+  file: File | null
+): Points<Geometry | BufferGeometry, Material | Material[]> | null => {
+  const [frame, setFrame] = useState<Points<
+    Geometry | BufferGeometry,
+    Material | Material[]
+  > | null>(null);
+  useEffect(() => {
+    if (!file) {
+      setFrame(null);
+    } else {
+      (file as File & BlobUnSupport)
+        .arrayBuffer()
+        .then((blob) => loader.parse(blob, file.name))
+        .then(setFrame);
+    }
+  }, [file]);
   return frame;
 };
 
@@ -70,20 +108,26 @@ interface AnnotationFrame {
   cuboids: Cuboid[];
 }
 
-export const useAnnotations = (sceneId: string) => {
-  // https://www.nuscenes.org/frames/afd73f70ff7d46d6b772d341c08e31a5/annotation.json
-
+export const useNuScenesAnnotations = (sceneParam: string | null) => {
   const [frame, setFrame] = useState<AnnotationFrame[]>([]);
   useEffect(() => {
+    if (!sceneParam) return;
+
     window
-      .fetch(`https://www.nuscenes.org/frames/${sceneId}/annotation.json`, {
-        mode: "cors",
-        credentials: "omit",
-      })
+      .fetch(
+        `https://www.nuscenes.org/frames/${
+          scenes.find((scene) => scene.name.endsWith(sceneParam))?.token ??
+          scenes[0].token
+        }/annotation.json`,
+        {
+          mode: "cors",
+          credentials: "omit",
+        }
+      )
       .then(async (resp) => [await resp.json(), resp])
       .then(([body, resp]) => {
         setFrame(body as AnnotationFrame[]);
       });
-  }, [sceneId]);
+  }, [sceneParam]);
   return frame;
 };
