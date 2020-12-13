@@ -316,7 +316,7 @@ const usePointCloud = ({
 
           const object = intersection.object;
           // @ts-ignore
-          object.material.emissive.b = 1;
+          // object.material.emissive.b = 1;
           controller.attach(object);
 
           controller.userData.selected = object;
@@ -329,7 +329,7 @@ const usePointCloud = ({
 
         if (controller.userData.selected !== undefined) {
           const object = controller.userData.selected;
-          object.material.emissive.b = 0;
+          // object.material.emissive.b = 0;
           group.attach(object);
 
           controller.userData.selected = undefined;
