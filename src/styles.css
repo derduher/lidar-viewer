@@ -31,10 +31,32 @@
 .sub {
   font-size: 27px;
 }
-#hi {
-  display: flex;
+#viewPort {
+  width: 50vw;
+  height: 50vh;
 }
 
 body {
   margin: 0;
+}
+
+.primaryContent {
+  height: 100vh;
+  display: grid;
+  align-content: center;
+  justify-content: center;
+  position: relative;
+}
+
+.controls {
+  padding: 2rem;
+}
+
+.controls div {
+  margin-bottom: 1rem;
+}
+
+.App {
+  display: grid;
+  grid-template-columns: 1fr 400px;
 }

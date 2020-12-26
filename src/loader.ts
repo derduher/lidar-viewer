@@ -40,18 +40,16 @@ export interface Frame {
   timestamp: number;
 }
 
-export const useNuScenesFrame = (
-  sceneParam: string | null,
-  frameNo: number
-) => {
+export const useNuScenesFrame = (sceneParam: string, frameNo: number) => {
   const [frame, setFrame] = useState<Frame | null>(null);
   useEffect(() => {
     if (!sceneParam) return;
+    const scene = scenes.find((scene) => scene.name.endsWith(sceneParam));
+    if (!scene) return;
     window
       .fetch(
         `https://www.nuscenes.org/frames/${
-          scenes.find((scene) => scene.name.endsWith(sceneParam))?.token ??
-          scenes[0].token
+          scene.token
         }/${frameNo.toString().padStart(3, "0")}.json`,
         {
           mode: "cors",
@@ -108,7 +106,7 @@ interface AnnotationFrame {
   cuboids: Cuboid[];
 }
 
-export const useNuScenesAnnotations = (sceneParam: string | null) => {
+export const useNuScenesAnnotations = (sceneParam: string) => {
   const [frame, setFrame] = useState<AnnotationFrame[]>([]);
   useEffect(() => {
     if (!sceneParam) return;
