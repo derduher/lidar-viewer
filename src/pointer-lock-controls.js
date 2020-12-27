@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-this-alias */
 import { Euler, EventDispatcher, Vector3 } from "three";
 
 var PointerLockControls = function (camera, domElement) {
@@ -27,8 +28,6 @@ var PointerLockControls = function (camera, domElement) {
   var unlockEvent = { type: "unlock" };
 
   var euler = new Euler(0, 0, 0, "ZYX");
-
-  var PI_2 = Math.PI / 2;
 
   var vec = new Vector3();
 

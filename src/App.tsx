@@ -1,4 +1,6 @@
-import React, { ChangeEventHandler, useRef, useState } from "react";
+/* eslint-disable jsx-a11y/control-has-associated-label */
+/* eslint-disable jsx-a11y/no-onchange */
+import { ChangeEventHandler, FC, useRef, useState } from "react";
 import "./styles.css";
 import { usePointCloud } from "./use-point-cloud";
 import scenes from "./scenes.json";
@@ -8,7 +10,7 @@ const sceneLabels = scenes.map(({ name }) => ({
   value: name.slice(6),
 }));
 
-export default function App() {
+const App: FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const viewPortRef = useRef<HTMLDivElement>(null);
   const blockerRef = useRef<HTMLDivElement>(null);
@@ -17,7 +19,6 @@ export default function App() {
   const [dotSize, setDotSize] = useState(0.05);
   const [sceneParam, setSceneParam] = useState("0011");
   const [dotColor, setDotColor] = useState("#80d4ff");
-  const [frameNo, setFrameNo] = useState(1);
   const handleDotSizeChange: ChangeEventHandler<HTMLInputElement> = (e) =>
     setDotSize(parseFloat(e.target.value));
   const handleBackgroundColorChange: ChangeEventHandler<HTMLInputElement> = (
@@ -25,8 +26,6 @@ export default function App() {
   ) => setBackgroundColor(e.target.value || "#000000");
   const handleSceneParamChange: ChangeEventHandler<HTMLSelectElement> = (e) =>
     setSceneParam(e.target.value);
-  const handleFrameParamChange: ChangeEventHandler<HTMLInputElement> = (e) =>
-    setFrameNo(parseInt(e.target.value || "1", 10));
   const handleColorChange: ChangeEventHandler<HTMLInputElement> = (e) =>
     setDotColor(e.target.value || "#80d4ff");
 
@@ -34,12 +33,10 @@ export default function App() {
     viewPortRef,
     selectedFile,
     sceneParam,
-    frameNo,
     backgroundColor,
     blockerRef,
     instructionsRef,
     dotSize,
-    setFrameNo,
     color: dotColor,
   });
   return (
@@ -68,7 +65,7 @@ export default function App() {
             id="pcd"
             type="file"
             name="pcd"
-            onChange={(e) =>
+            onChange={(e): void =>
               setSelectedFile(e.target.files && e.target.files[0])
             }
           />
@@ -87,32 +84,22 @@ export default function App() {
           {dotSize}
         </div>
         <div>
-          <label htmlFor="SceneParamInput">SceneParam</label>
-          <select
-            id="SceneParamInput"
-            value={sceneParam}
-            onChange={handleSceneParamChange}
-          >
-            <option></option>
-            {sceneLabels.map(({ label, value }) => (
-              <option key={label} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>{" "}
+          <label htmlFor="SceneParamInput">
+            SceneParam
+            <select
+              id="SceneParamInput"
+              value={sceneParam}
+              onChange={handleSceneParamChange}
+            >
+              <option value=""></option>
+              {sceneLabels.map(({ label, value }) => (
+                <option key={label} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>{" "}
+          </label>
           {sceneParam}
-        </div>
-        <div>
-          <label htmlFor="frameParamInput">frameParam</label>
-          <input
-            id="frameParamInput"
-            type="range"
-            min="1"
-            max="40"
-            value={frameNo.toString()}
-            onChange={handleFrameParamChange}
-          />{" "}
-          {frameNo.toString()}
         </div>
         <div>
           <label htmlFor="colorInput">color</label>
@@ -137,4 +124,6 @@ export default function App() {
       </div>
     </div>
   );
-}
+};
+
+export default App;

@@ -1,4 +1,4 @@
-import { Dispatch, RefObject, useEffect, useState } from "react";
+import { RefObject, useEffect, useState } from "react";
 
 import {
   Vector3,
@@ -7,14 +7,14 @@ import {
   WebGLRenderer,
   Object3D,
   BufferGeometry,
-  EdgesGeometry,
-  LineDashedMaterial,
-  LineSegments,
+  // EdgesGeometry,
+  // LineDashedMaterial,
+  // LineSegments,
   Float32BufferAttribute,
   Points,
   PointsMaterial,
   HSL,
-  BoxBufferGeometry,
+  // BoxBufferGeometry,
   Color,
   GridHelper,
   Quaternion,
@@ -45,7 +45,7 @@ const p: ControlKeysPressed = {
 };
 
 const bindControls = (): void => {
-  const onKeyDown = function (event: KeyboardEvent) {
+  const onKeyDown = (event: KeyboardEvent): void => {
     switch (event.code) {
       case "ArrowLeft": // left
         p.reverseTime = true;
@@ -81,7 +81,7 @@ const bindControls = (): void => {
     }
   };
 
-  const onKeyUp = function (event: KeyboardEvent) {
+  const onKeyUp = (event: KeyboardEvent): void => {
     switch (event.code) {
       case "ArrowLeft": // left
         p.reverseTime = false;
@@ -129,7 +129,6 @@ function init({
   annotations,
   nuScenesFrame,
   backgroundColor,
-  frameNo,
   dotSize,
   color,
 }: {
@@ -140,7 +139,6 @@ function init({
   annotations: ReturnType<typeof useNuScenesAnnotations>;
   nuScenesFrame: ReturnType<typeof useNuScenesFrame>;
   backgroundColor: string;
-  frameNo: number;
   dotSize: number;
   color: string;
 }): [PerspectiveCamera, Scene, PointerLockControls] | void {
@@ -148,13 +146,13 @@ function init({
     (!localFrame && selectedFile) ||
     (sceneParam !== "" && (!annotations.length || !nuScenesFrame))
   )
-    return;
+    return undefined;
 
   let points: Object3D;
 
   //
 
-  let camera = new PerspectiveCamera(
+  const camera = new PerspectiveCamera(
     50,
     window.innerWidth / window.innerHeight,
     0.5,
@@ -168,8 +166,8 @@ function init({
 
   const geometry = new BufferGeometry();
 
-  const positions = [];
-  const colors = [];
+  const positions: number[] = [];
+  const colors: number[] = [];
   const hsl: HSL = { h: 0, s: 0, l: 0 };
   new Color(color).getHSL(hsl);
 
@@ -178,43 +176,45 @@ function init({
   camera.up = new Vector3(0, 0, 1);
   const ctrl = new TransformControls(camera, renderer.domElement);
   if (nuScenesFrame && !localFrame) {
-    const { x: px, y: py, z: pz } = nuScenesFrame.device_position;
+    const { x: px, y: py, z: pz } = nuScenesFrame[0].device_position;
     camera.position.x = px;
     camera.position.y = py;
     camera.position.z = pz;
 
-    for (let i = 0; i < nuScenesFrame.points.length; i++) {
-      const { x, y, z, i: intensity } = nuScenesFrame.points[i];
-      positions.push(x, y, z);
-      const pointColor = new Color();
-      pointColor.setHSL(hsl.h, hsl.s, intensity / 192 + 0.25);
+    nuScenesFrame.forEach((frame) => {
+      for (let i = 0; i < frame.points.length; i++) {
+        const { x, y, z, i: intensity } = frame.points[i];
+        positions.push(x, y, z);
+        const pointColor = new Color();
+        pointColor.setHSL(hsl.h, hsl.s, intensity / 192 + 0.25);
 
-      colors.push(pointColor.r, pointColor.g, pointColor.b);
-    }
-    annotations[frameNo - 1].cuboids.forEach(
-      ({ dimensions, position: { x, y, z }, yaw }) => {
-        const geo = new BoxBufferGeometry(
-          dimensions.x,
-          dimensions.y,
-          dimensions.z
-        );
-        geo.rotateZ(yaw);
-        geo.translate(x, y, z);
-        geo.computeBoundingSphere();
-        const material = new LineDashedMaterial({
-          dashSize: 0.2,
-          gapSize: 0.1,
-          color: "#FFC0CB",
-        });
-        const mesh = new LineSegments(
-          new EdgesGeometry(geo.toNonIndexed()),
-          material
-        );
-        mesh.computeLineDistances();
-
-        scene.add(mesh);
+        colors.push(pointColor.r, pointColor.g, pointColor.b);
       }
-    );
+      // annotations[frameNo - 1].cuboids.forEach(
+      //   ({ dimensions, position: { x, y, z }, yaw }) => {
+      //     const geo = new BoxBufferGeometry(
+      //       dimensions.x,
+      //       dimensions.y,
+      //       dimensions.z
+      //     );
+      //     geo.rotateZ(yaw);
+      //     geo.translate(x, y, z);
+      //     geo.computeBoundingSphere();
+      //     const material = new LineDashedMaterial({
+      //       dashSize: 0.2,
+      //       gapSize: 0.1,
+      //       color: "#FFC0CB",
+      //     });
+      //     const mesh = new LineSegments(
+      //       new EdgesGeometry(geo.toNonIndexed()),
+      //       material
+      //     );
+      //     mesh.computeLineDistances();
+
+      //     scene.add(mesh);
+      //   }
+      // );
+    });
 
     geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
     geometry.setAttribute("color", new Float32BufferAttribute(colors, 3));
@@ -233,10 +233,10 @@ function init({
     ctrl.attach(points);
     camera.applyQuaternion(
       new Quaternion(
-        nuScenesFrame.device_heading.x,
-        nuScenesFrame.device_heading.y,
-        nuScenesFrame.device_heading.z,
-        nuScenesFrame.device_heading.w
+        nuScenesFrame[0].device_heading.x,
+        nuScenesFrame[0].device_heading.y,
+        nuScenesFrame[0].device_heading.z,
+        nuScenesFrame[0].device_heading.w
       )
     );
   } else if (localFrame) {
@@ -252,6 +252,7 @@ function init({
     scene.add(localFrame);
     ctrl.attach(localFrame);
   } else {
+    // eslint-disable-next-line no-debugger
     debugger;
   }
   scene.add(ctrl);
@@ -273,40 +274,35 @@ export interface UsePointCloudParams {
   instructionsRef: RefObject<HTMLDivElement>;
   selectedFile: File | null;
   sceneParam: string;
-  frameNo: number;
   backgroundColor: string;
   dotSize: number;
-  setFrameNo: Dispatch<React.SetStateAction<number>>;
   color: string;
 }
 export const usePointCloud = ({
   viewPortRef,
   selectedFile,
   sceneParam,
-  frameNo,
   backgroundColor,
   blockerRef,
   instructionsRef,
   dotSize,
-  setFrameNo,
   color,
-}: UsePointCloudParams) => {
+}: UsePointCloudParams): void => {
   const localFrame = useLocal(selectedFile);
-  const nuScenesFrame = useNuScenesFrame(sceneParam, frameNo);
+  const nuScenesFrame = useNuScenesFrame(sceneParam);
   const annotations = useNuScenesAnnotations(sceneParam);
   const [renderer, setRenderer] = useState<WebGLRenderer | null>(null);
   useEffect(() => {
-    if (!viewPortRef.current) return;
-    let viewPortDomEl = viewPortRef.current;
+    if (!viewPortRef.current) return undefined;
+    const viewPortDomEl = viewPortRef.current;
     const r = new WebGLRenderer();
     r.setPixelRatio(window.devicePixelRatio);
     r.setSize(viewPortDomEl.clientWidth, viewPortDomEl.clientHeight);
 
     viewPortDomEl.appendChild(r.domElement);
     setRenderer(r);
-    return () => {
-      r.dispose();
-    };
+    bindControls();
+    return (): void => r.dispose();
   }, [viewPortRef]);
   useEffect(() => {
     if (
@@ -317,11 +313,9 @@ export const usePointCloud = ({
       (!localFrame && selectedFile) ||
       (sceneParam !== "" && (!annotations.length || !nuScenesFrame))
     ) {
-      return;
+      return undefined;
     }
     // const pos = frame.device_position;
-
-    bindControls();
 
     let prevTime = performance.now();
     const velocity = new Vector3();
@@ -335,11 +329,10 @@ export const usePointCloud = ({
       nuScenesFrame,
       annotations,
       backgroundColor,
-      frameNo,
       dotSize,
       color,
     });
-    if (!initResults) return;
+    if (!initResults) return undefined;
     const [camera, scene, controls] = initResults;
 
     controls.addEventListener("lock", function () {
@@ -372,7 +365,7 @@ export const usePointCloud = ({
     animate(performance.now());
 
     window.addEventListener("resize", onWindowResize, false);
-    function onWindowResize() {
+    function onWindowResize(): void {
       if (!viewPortRef.current || !renderer) return;
       camera.aspect =
         viewPortRef.current.clientWidth / viewPortRef.current.clientHeight;
@@ -386,7 +379,7 @@ export const usePointCloud = ({
 
     //
 
-    function animate(time: number) {
+    function animate(time: number): void {
       requestAnimationFrame(animate);
 
       const {
@@ -396,8 +389,8 @@ export const usePointCloud = ({
         moveLeft,
         moveRight,
         moveUp,
-        reverseTime,
-        advanceTime,
+        // reverseTime,
+        // advanceTime,
       } = p;
 
       if (controls.isLocked === true) {
@@ -417,10 +410,10 @@ export const usePointCloud = ({
           velocity.z -= direction.z * 100.0 * delta;
         if (moveLeft || moveRight) velocity.x -= direction.x * 100.0 * delta;
         if (moveUp || moveDown) velocity.y -= direction.y * 100.0 * delta;
-        if (advanceTime || reverseTime)
-          setFrameNo(
-            (frameNo) => frameNo + Number(advanceTime) - Number(reverseTime)
-          );
+        // if (advanceTime || reverseTime)
+        //   setFrameNo(
+        //     (frameNo) => frameNo + Number(advanceTime) - Number(reverseTime)
+        //   );
 
         controls.moveRight(-velocity.x * delta);
         controls.moveForward(-velocity.z * delta);
@@ -432,17 +425,16 @@ export const usePointCloud = ({
       render();
     }
 
-    function render() {
+    function render(): void {
       renderer?.render(scene, camera);
     }
-    return () => {
+    return (): void => {
       controls.dispose();
     };
   }, [
     viewPortRef,
     localFrame,
     annotations,
-    frameNo,
     backgroundColor,
     nuScenesFrame,
     sceneParam,
@@ -450,7 +442,6 @@ export const usePointCloud = ({
     blockerRef,
     instructionsRef,
     dotSize,
-    setFrameNo,
     renderer,
     color,
   ]);

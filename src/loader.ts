@@ -40,27 +40,39 @@ export interface Frame {
   timestamp: number;
 }
 
-export const useNuScenesFrame = (sceneParam: string, frameNo: number) => {
-  const [frame, setFrame] = useState<Frame | null>(null);
+export const useNuScenesFrame = (sceneParam: string): Frame[] | null => {
+  const [frame, setFrame] = useState<Frame[] | null>(null);
   useEffect(() => {
     if (!sceneParam) return;
     const scene = scenes.find((scene) => scene.name.endsWith(sceneParam));
     if (!scene) return;
-    window
-      .fetch(
-        `https://www.nuscenes.org/frames/${
-          scene.token
-        }/${frameNo.toString().padStart(3, "0")}.json`,
-        {
-          mode: "cors",
-          credentials: "omit",
-        }
-      )
-      .then(async (resp) => [await resp.json(), resp])
-      .then(([body, resp]) => {
-        setFrame(body as Frame);
-      });
-  }, [frameNo, sceneParam]);
+    const numberspread: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      numberspread[i] = i;
+    }
+    const promises: Promise<[Frame, Response]>[] = numberspread.map((frameNo) =>
+      window
+        .fetch(
+          `https://www.nuscenes.org/frames/${scene.token}/${(frameNo + 1)
+            .toString()
+            .padStart(3, "0")}.json`,
+          {
+            mode: "cors",
+            credentials: "omit",
+          }
+        )
+        .then(async (resp) => [(await resp.json()) as Frame, resp])
+    );
+    Promise.allSettled(promises).then((results) => {
+      setFrame(
+        results
+          .filter((resp) => resp.status === "fulfilled")
+          .map((resp) => {
+            return (resp as PromiseFulfilledResult<[Frame, Response]>).value[0];
+          })
+      );
+    });
+  }, [sceneParam]);
   return frame;
 };
 
@@ -106,7 +118,9 @@ interface AnnotationFrame {
   cuboids: Cuboid[];
 }
 
-export const useNuScenesAnnotations = (sceneParam: string) => {
+export const useNuScenesAnnotations = (
+  sceneParam: string
+): AnnotationFrame[] => {
   const [frame, setFrame] = useState<AnnotationFrame[]>([]);
   useEffect(() => {
     if (!sceneParam) return;
