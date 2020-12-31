@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { BufferGeometry, Geometry, Material, Points } from "three";
-import { PCDLoader } from "three/examples/jsm/loaders/PCDLoader";
+import { BufferGeometry, Color, Geometry, Material, Points } from "three";
+import { PCDLoader } from "./pcd-loader";
 import scenes from "./scenes.json";
 
 export interface BasicVector3 {
@@ -82,7 +82,8 @@ interface BlobUnSupport {
 
 const loader = new PCDLoader();
 export const useLocal = (
-  file: File | null
+  file: File | null,
+  dotColor: Color
 ): Points<Geometry | BufferGeometry, Material | Material[]> | null => {
   const [frame, setFrame] = useState<Points<
     Geometry | BufferGeometry,
@@ -94,10 +95,10 @@ export const useLocal = (
     } else {
       (file as File & BlobUnSupport)
         .arrayBuffer()
-        .then((blob) => loader.parse(blob, file.name))
+        .then((blob) => loader.parse(blob, file.name, dotColor))
         .then(setFrame);
     }
-  }, [file]);
+  }, [dotColor, file]);
   return frame;
 };
 
@@ -114,7 +115,7 @@ export interface Cuboid {
   };
 }
 
-interface AnnotationFrame {
+export interface AnnotationFrame {
   cuboids: Cuboid[];
 }
 
