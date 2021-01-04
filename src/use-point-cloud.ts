@@ -5,30 +5,25 @@ import {
   PerspectiveCamera,
   Scene,
   WebGLRenderer,
-  Object3D,
-  BufferGeometry,
-  Float32BufferAttribute,
-  Points,
   PointsMaterial,
-  HSL,
   Color,
   GridHelper,
+  Camera,
   Quaternion,
-  BoxBufferGeometry,
-  LineDashedMaterial,
+  Group,
+  Points,
   LineSegments,
-  EdgesGeometry,
+  LineDashedMaterial,
 } from "three";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
 import { PointerLockControls } from "./pointer-lock-controls";
 import {
   useNuScenesAnnotations,
-  useNuScenesFrame,
   useLocal,
-  Frame,
-  AnnotationFrame,
+  useNuScenesAnnotationMeshes,
+  useNuScenesFrameMesh,
 } from "./loader";
-import { colorToHSL } from "./utils";
+import { Frame } from "./frame";
 interface ControlKeysPressed {
   moveForward: boolean;
   moveBackward: boolean;
@@ -138,28 +133,20 @@ function init({
   backgroundColor,
   dotSize,
   dotColor,
-  cameraHeading,
-  cameraPosition,
 }: {
   renderer: WebGLRenderer;
   localFrame: ReturnType<typeof useLocal>;
   selectedFile: UsePointCloudParams["selectedFile"];
   sceneParam: UsePointCloudParams["sceneParam"];
   annotations: ReturnType<typeof useNuScenesAnnotationMeshes>;
-  nuScenesFrames: ReturnType<typeof useNuScenesFrameMesh>;
-  backgroundColor: string;
+  nuScenesFrames: Frame[] | null;
+  backgroundColor: Color;
   dotSize: number;
   dotColor: Color;
-  cameraPosition: Frame["device_position"] | null;
-  cameraHeading: Frame["device_heading"] | null;
 }): [PerspectiveCamera, Scene, PointerLockControls] | void {
   if (
     (!localFrame && selectedFile) ||
-    (sceneParam !== "" &&
-      (!annotations.length ||
-        !nuScenesFrames ||
-        !cameraPosition ||
-        !cameraHeading))
+    (sceneParam !== "" && (!annotations.length || !nuScenesFrames))
   )
     return undefined;
 
@@ -172,30 +159,26 @@ function init({
   camera.rotation.x = Math.PI / 2;
 
   const scene = new Scene();
-  scene.background = new Color(backgroundColor);
-
-  const hsl: HSL = { h: 0, s: 0, l: 0 };
-  dotColor.getHSL(hsl);
+  scene.background = backgroundColor;
 
   camera.up = new Vector3(0, 0, 1);
   const ctrl = new TransformControls(camera, renderer.domElement);
-  if (nuScenesFrames && !localFrame && cameraPosition && cameraHeading) {
-    const { x: px, y: py, z: pz } = cameraPosition;
-    camera.position.x = px;
-    camera.position.y = py;
-    camera.position.z = pz;
+  if (nuScenesFrames && !localFrame) {
+    const [firstFrame] = nuScenesFrames;
 
-    nuScenesFrames.forEach((frame) => scene.add(frame));
-    annotations.forEach((frame) => frame.forEach((ann) => scene.add(ann)));
-    ctrl.attach(nuScenesFrames[0]);
-    camera.applyQuaternion(
-      new Quaternion(
-        cameraHeading.x,
-        cameraHeading.y,
-        cameraHeading.z,
-        cameraHeading.w
-      )
+    const allPoints = new Group();
+    nuScenesFrames.forEach((frame) => allPoints.add(frame.points));
+    allPoints.name = "allPoints";
+    scene.add(allPoints);
+
+    const allAnnotations = new Group();
+    annotations.forEach((frame) =>
+      frame.forEach((ann) => allAnnotations.add(ann))
     );
+    allAnnotations.name = "allAnnotations";
+    scene.add(allAnnotations);
+
+    ctrl.attach(firstFrame.points);
   } else if (localFrame) {
     (Array.isArray(localFrame.material)
       ? localFrame.material
@@ -225,20 +208,86 @@ function init({
   return [camera, scene, controls];
 }
 
+const useFrameAttributes = ({
+  dotColor,
+  dotSize,
+  dashColor,
+  dashSize,
+  dashGap,
+  activeCameraPosition,
+  activeCameraHeading,
+  camera,
+  scene,
+  backgroundColor,
+}: {
+  dotColor: Color;
+  dotSize: number;
+  dashColor: Color;
+  dashSize: number;
+  dashGap: number;
+  activeCameraPosition: Vector3;
+  activeCameraHeading: Quaternion;
+  camera: Camera | null;
+  scene: Scene | null;
+  backgroundColor: Color;
+}): void => {
+  useEffect(() => {
+    if (!camera) return;
+    camera.position.x = activeCameraPosition.x;
+    camera.position.y = activeCameraPosition.y;
+    camera.position.z = activeCameraPosition.z;
+    // camera.setRotationFromQuaternion(activeCameraHeading);
+    // camera.rotateX(Math.PI / 2);
+    // camera.quaternion.normalize();
+    // camera.rotation.y = -Math.PI / 2;
+  }, [camera, activeCameraPosition, activeCameraHeading]);
+  useEffect(() => {
+    if (!scene) return;
+    scene.background = backgroundColor;
+  }, [scene, backgroundColor]);
+
+  useEffect(() => {
+    if (!scene) return;
+    const ann = scene.getObjectByName("allAnnotations");
+    if (!ann) return;
+    (ann as Group).children.forEach((frame) => {
+      const mat = (frame as LineSegments).material as LineDashedMaterial;
+      mat.color = dashColor;
+      mat.dashSize = dashSize;
+      mat.gapSize = dashGap;
+    });
+  }, [scene, dashColor, dashSize, dashGap]);
+
+  useEffect(() => {
+    if (!scene) return;
+    const allPoints = scene.getObjectByName("allPoints");
+    if (!allPoints) return;
+    (allPoints as Group).children.forEach((frame) => {
+      const mat = (frame as Points).material as PointsMaterial;
+      mat.color = dotColor;
+      mat.size = dotSize;
+    });
+  }, [scene, dotColor, dotSize]);
+};
+
 export interface UsePointCloudParams {
+  activeCameraHeading: Quaternion;
+  activeCameraPosition: Vector3;
   viewPortRef: RefObject<HTMLDivElement>;
   blockerRef: RefObject<HTMLDivElement>;
   instructionsRef: RefObject<HTMLDivElement>;
   selectedFile: File | null;
   sceneParam: string;
-  backgroundColor: string;
+  backgroundColor: Color;
   dotSize: number;
   dotColor: Color;
-  annotationColor: Color;
-  annotationDashSize: number;
-  annotationDashGap: number;
+  dashColor: Color;
+  dashSize: number;
+  dashGap: number;
 }
 export const usePointCloud = ({
+  activeCameraPosition,
+  activeCameraHeading,
   viewPortRef,
   selectedFile,
   sceneParam,
@@ -247,25 +296,26 @@ export const usePointCloud = ({
   instructionsRef,
   dotSize,
   dotColor,
-  annotationColor,
-  annotationDashSize,
-  annotationDashGap,
-}: UsePointCloudParams): void => {
+  dashColor,
+  dashSize,
+  dashGap,
+}: UsePointCloudParams): Frame[] | null => {
   const localFrame = useLocal(selectedFile, dotColor);
-  const nuScenesFrames = useNuScenesFrame(sceneParam);
   const nuScenesFrameGeometries = useNuScenesFrameMesh({
-    frames: nuScenesFrames,
+    sceneParam,
     dotColor,
     dotSize,
   });
   const rawAnnotations = useNuScenesAnnotations(sceneParam);
   const annotationMeshes = useNuScenesAnnotationMeshes(
     rawAnnotations,
-    annotationColor,
-    annotationDashSize,
-    annotationDashGap
+    dashColor,
+    dashSize,
+    dashGap
   );
   const [renderer, setRenderer] = useState<WebGLRenderer | null>(null);
+  const [camera, setCamera] = useState<Camera | null>(null);
+  const [scene, setScene] = useState<Scene | null>(null);
   useEffect(() => {
     if (!viewPortRef.current) return undefined;
     const viewPortDomEl = viewPortRef.current;
@@ -285,7 +335,8 @@ export const usePointCloud = ({
       !blockerRef.current ||
       (!localFrame && !sceneParam) ||
       (!localFrame && selectedFile) ||
-      (sceneParam !== "" && (!annotationMeshes.length || !nuScenesFrames))
+      (sceneParam !== "" &&
+        (!annotationMeshes.length || !nuScenesFrameGeometries))
     ) {
       return undefined;
     }
@@ -301,15 +352,15 @@ export const usePointCloud = ({
       selectedFile,
       sceneParam,
       nuScenesFrames: nuScenesFrameGeometries,
-      cameraPosition: nuScenesFrames && nuScenesFrames[0].device_position,
-      cameraHeading: nuScenesFrames && nuScenesFrames[0].device_heading,
       annotations: annotationMeshes,
       backgroundColor,
       dotSize,
-      dotColor: dotColor,
+      dotColor,
     });
     if (!initResults) return undefined;
     const [camera, scene, controls] = initResults;
+    setCamera(camera);
+    setScene(scene);
 
     controls.addEventListener("lock", function () {
       if (!instructionsRef.current || !blockerRef.current) return;
@@ -412,7 +463,6 @@ export const usePointCloud = ({
     localFrame,
     rawAnnotations,
     backgroundColor,
-    nuScenesFrames,
     sceneParam,
     selectedFile,
     blockerRef,
@@ -423,105 +473,17 @@ export const usePointCloud = ({
     nuScenesFrameGeometries,
     annotationMeshes,
   ]);
-};
-
-const frameToMesh = ({
-  frame,
-  dotColor,
-  dotSize,
-}: {
-  frame: Frame;
-  dotColor: HSL;
-  dotSize: number;
-}): Object3D => {
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const geometry = new BufferGeometry();
-  for (let i = 0; i < frame.points.length; i++) {
-    const { x, y, z, i: intensity } = frame.points[i];
-    positions.push(x, y, z);
-    const pointColor = new Color();
-    pointColor.setHSL(dotColor.h, dotColor.s, intensity / 192 + 0.25);
-
-    colors.push(pointColor.r, pointColor.g, pointColor.b);
-  }
-
-  geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new Float32BufferAttribute(colors, 3));
-
-  geometry.computeBoundingSphere();
-
-  //
-
-  const material = new PointsMaterial({
-    size: dotSize,
-    vertexColors: true,
+  useFrameAttributes({
+    dotColor,
+    dotSize,
+    dashColor,
+    dashSize,
+    dashGap,
+    scene,
+    backgroundColor,
+    activeCameraHeading,
+    activeCameraPosition,
+    camera,
   });
-
-  return new Points(geometry, material);
-};
-
-const useNuScenesFrameMesh = ({
-  frames,
-  dotSize,
-  dotColor,
-}: {
-  frames: Frame[] | null;
-  dotSize: number;
-  dotColor: Color;
-}): Object3D[] | null => {
-  const [geometries, setGeometries] = useState<Object3D[] | null>(null);
-  useEffect(() => {
-    if (!frames) return;
-    const hslColor = colorToHSL(dotColor);
-    setGeometries(
-      frames.map((frame) => frameToMesh({ frame, dotColor: hslColor, dotSize }))
-    );
-  }, [dotColor, dotSize, frames]);
-  return geometries;
-};
-
-const annotationsToMesh = (
-  annotations: AnnotationFrame[],
-  wireColor: Color,
-  dashSize: number,
-  gapSize: number
-): LineSegments[][] =>
-  annotations.map((frame) =>
-    frame.cuboids.map(({ dimensions, position: { x, y, z }, yaw }) => {
-      const geo = new BoxBufferGeometry(
-        dimensions.x,
-        dimensions.y,
-        dimensions.z
-      );
-      geo.rotateZ(yaw);
-      geo.translate(x, y, z);
-      geo.computeBoundingSphere();
-      const material = new LineDashedMaterial({
-        dashSize,
-        gapSize,
-        color: wireColor,
-      });
-      const mesh = new LineSegments(
-        new EdgesGeometry(geo.toNonIndexed()),
-        material
-      );
-      mesh.computeLineDistances();
-      return mesh;
-    })
-  );
-
-const useNuScenesAnnotationMeshes = (
-  annotations: ReturnType<typeof useNuScenesAnnotations>,
-  wireColor: Color,
-  dashSize: number,
-  gapSize: number
-): ReturnType<typeof annotationsToMesh> => {
-  const [converted, setConverted] = useState<
-    ReturnType<typeof annotationsToMesh>
-  >([]);
-  useEffect(() => {
-    setConverted(annotationsToMesh(annotations, wireColor, dashSize, gapSize));
-  }, [annotations, dashSize, gapSize, wireColor]);
-  return converted;
+  return nuScenesFrameGeometries;
 };
